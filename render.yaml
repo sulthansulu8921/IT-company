@@ -26,9 +26,7 @@ services:
 
   # 2. React Frontend (Static Site)
   - type: web
-    name: startup-frontend
     env: static
-    plan: free
     rootDir: .
     buildCommand: "npm install && npm run build"
     staticPublishPath: ./dist

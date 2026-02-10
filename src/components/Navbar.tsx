@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { motion } from "framer-motion";
 import Logo1 from "@/assets/logo-2.png";
+import { useAuth } from "@/context/AuthContext";
+import { UserRole } from "@/types";
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState<boolean>(false); // frontend-only auth
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -18,8 +20,18 @@ export const Navbar = () => {
   ];
 
   const handleLogout = () => {
-    setUser(false);
+    logout();
     navigate("/");
+  };
+
+  const getDashboardLink = () => {
+    if (!user) return "/";
+    switch (user.role) {
+      case UserRole.ADMIN: return "/admin";
+      case UserRole.DEVELOPER: return "/developer";
+      case UserRole.CLIENT: return "/client";
+      default: return "/";
+    }
   };
 
   return (
@@ -54,7 +66,7 @@ export const Navbar = () => {
 
             {user ? (
               <>
-                <Link to="/developer-dashboard">
+                <Link to={getDashboardLink()}>
                   <Button variant="ghost">Dashboard</Button>
                 </Link>
                 <Button onClick={handleLogout} variant="outline">
@@ -62,7 +74,9 @@ export const Navbar = () => {
                 </Button>
               </>
             ) : (
-              <Button onClick={() => setUser(true)}>Login</Button>
+              <Link to="/auth/login">
+                <Button>Login</Button>
+              </Link>
             )}
           </div>
 
@@ -97,15 +111,17 @@ export const Navbar = () => {
 
             {user ? (
               <>
-                <Link to="/developer-dashboard">Dashboard</Link>
+                <Link to={getDashboardLink()}>Dashboard</Link>
                 <Button onClick={handleLogout} className="w-full" variant="outline">
                   Logout
                 </Button>
               </>
             ) : (
-              <Button onClick={() => setUser(true)} className="w-full">
-                Login
-              </Button>
+              <Link to="/auth/login">
+                <Button className="w-full">
+                  Login
+                </Button>
+              </Link>
             )}
           </div>
         </motion.div>

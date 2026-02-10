@@ -11,6 +11,7 @@ class UserRole(models.TextChoices):
 
 class ProjectStatus(models.TextChoices):
     PENDING = 'Pending', 'Pending'
+    OPEN = 'Open', 'Open'  # Approved by Admin, visible to Developers
     IN_PROGRESS = 'In Progress', 'In Progress'
     REVIEW = 'Review', 'Review'
     COMPLETED = 'Completed', 'Completed'
@@ -47,12 +48,23 @@ class Profile(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.role}"
 
+class ServiceType(models.TextChoices):
+    LOGO_BRANDING = 'Logo & Branding', 'Logo & Branding'
+    POSTER_DESIGN = 'Poster / Banner Design', 'Poster / Banner Design'
+    WEBSITE_DEV = 'Website Development', 'Website Development'
+    WEB_APP = 'Web Application', 'Web Application'
+    MOBILE_APP = 'Mobile App', 'Mobile App'
+    DIGITAL_MARKETING = 'Digital Marketing', 'Digital Marketing'
+    SEO = 'SEO', 'SEO'
+    MAINTENANCE = 'Maintenance & Support', 'Maintenance & Support'
+    HOSTING = 'Hosting & Deployment', 'Hosting & Deployment'
+
 # --- Project Model (Client Request) ---
 class Project(models.Model):
     client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='client_projects')
     title = models.CharField(max_length=200)
     description = models.TextField()
-    service_type = models.CharField(max_length=100, help_text="Logo, Web, App etc.")
+    service_type = models.CharField(max_length=100, choices=ServiceType.choices)
     budget = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     deadline = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=50, choices=ProjectStatus.choices, default=ProjectStatus.PENDING)
@@ -60,6 +72,7 @@ class Project(models.Model):
     
     def __str__(self):
         return f"{self.title} ({self.status})"
+
 
 # --- Task Model (Admin assigns to Developer) ---
 class Task(models.Model):

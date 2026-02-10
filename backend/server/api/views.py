@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
-from .models import Profile, Project, Task, Message, Payment, UserRole, ProjectApplication
+from .models import Profile, Project, Task, Message, Payment, UserRole, ProjectApplication, ProjectStatus
 from .serializers import (
     RegisterSerializer, UserSerializer, ProfileSerializer, 
     ProjectSerializer, TaskSerializer, MessageSerializer, PaymentSerializer, ProjectApplicationSerializer
@@ -15,6 +15,14 @@ class RegisterView(generics.CreateAPIView):
     queryset = Profile.objects.all()
     permission_classes = [permissions.AllowAny]
     serializer_class = RegisterSerializer
+
+    def create(self, request, *args, **kwargs):
+        print(f"DEBUG: Register request data: {request.data}")
+        try:
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            print(f"DEBUG: Register exception: {e}")
+            raise e
 
 class UserDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
@@ -29,6 +37,13 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdmin]
     http_method_names = ['get', 'patch', 'delete', 'head', 'options']
 
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def admin_contact(self, request):
+        admin_profile = Profile.objects.filter(role=UserRole.ADMIN).first()
+        if not admin_profile:
+            return Response({"detail": "No admin found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ProfileSerializer(admin_profile).data)
+
 # --- ViewSets ---
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
@@ -41,9 +56,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
         elif user.profile.role == UserRole.CLIENT:
             return Project.objects.filter(client=user)
         elif user.profile.role == UserRole.DEVELOPER:
-            # Allow developers to see projects they are working on OR projects that are approved (In Progress)
+            # Allow developers to see OPEN projects in market OR projects they are working on
             return Project.objects.filter(
-                Q(tasks__assigned_to=user) | Q(status='In Progress')
+                Q(tasks__assigned_to=user) | Q(status=ProjectStatus.OPEN) | Q(status=ProjectStatus.IN_PROGRESS)
             ).distinct()
         return Project.objects.none()
 

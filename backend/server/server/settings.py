@@ -92,7 +92,8 @@ WSGI_APPLICATION = 'server.wsgi.application'
 
 DATABASES = {
     'default': dj_database_url.config(
-        default='postgres://sulthanshafeer:@localhost:5433/devconnect_db',
+        # Fallback to SQLite locally if DATABASE_URL is not set (e.g. not in production)
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
         conn_max_age=600
     )
 }

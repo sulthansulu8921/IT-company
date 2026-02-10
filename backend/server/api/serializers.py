@@ -53,17 +53,16 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = '__all__'
-        read_only_fields = ['client', 'status', 'created_at']
+        read_only_fields = ['client', 'created_at']
 
 class TaskSerializer(serializers.ModelSerializer):
-    assigned_to_name = serializers.ReadOnlyField(source='assigned_to.username')
+    assigned_to_name = serializers.ReadOnlyField(source='assigned_to.username', default=None)
     project_title = serializers.ReadOnlyField(source='project.title')
 
     class Meta:
         model = Task
         fields = '__all__'
         read_only_fields = ['status', 'created_at']
-
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.ReadOnlyField(source='sender.username')
@@ -76,7 +75,7 @@ class MessageSerializer(serializers.ModelSerializer):
 
 class PaymentSerializer(serializers.ModelSerializer):
     payer_name = serializers.ReadOnlyField(source='payer.username')
-    payee_name = serializers.ReadOnlyField(source='payee.username')
+    payee_name = serializers.ReadOnlyField(source='payee.username', default=None)
 
     class Meta:
         model = Payment

@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserRole } from '@/types';
 
+import bg1 from "@/assets/bg1.jpeg";
+
 const RegisterDeveloper = () => {
     const { register } = useAuth();
     const navigate = useNavigate();
@@ -28,15 +30,30 @@ const RegisterDeveloper = () => {
             toast.success('Registration successful. Wait for admin approval.');
             navigate('/auth/login');
         } catch (error: any) {
-            toast.error('Registration failed.');
+            console.error("Registration error:", error);
+            const errorMsg = error.response?.data?.detail ||
+                (typeof error.response?.data === 'object' ? JSON.stringify(error.response?.data) : null) ||
+                'Registration failed.';
+            toast.error(errorMsg);
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50">
-            <Card className="w-full max-w-md">
+        <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
+            {/* Background */}
+            <div className="absolute inset-0 z-0">
+                <img
+                    src={bg1}
+                    alt="Background"
+                    className="w-full h-full object-cover opacity-50"
+                />
+                <div className="absolute inset-0 tech-grid-bg opacity-40" />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/50 to-background" />
+            </div>
+
+            <Card className="relative z-10 w-full max-w-md mx-4 animate-fade-in backdrop-blur-sm bg-card/90">
                 <CardHeader>
                     <CardTitle>Developer Registration</CardTitle>
                     <CardDescription>Join our team of developers</CardDescription>

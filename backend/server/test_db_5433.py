@@ -1,26 +1,27 @@
 import psycopg2
 import sys
 
-# The logs showed process is running as 'sulthanshafeer'
-# Homebrew postgres often uses the system username as the default db user
-configs = [
-    {'user': 'sulthanshafeer', 'password': '', 'port': 5433, 'dbname': 'postgres'}, 
-    {'user': 'sulthanshafeer', 'password': '', 'port': 5433, 'dbname': 'template1'},
-    {'user': 'postgres', 'password': '', 'port': 5433, 'dbname': 'postgres'},
-]
+# Common passwords to try for local development
+passwords = ['', 'postgres', 'password', 'admin', 'root', '123456', 'sulthanshafeer']
+users = ['sulthanshafeer', 'postgres']
+dbname = 'postgres'  # Try connecting to default db first
+port = 5433
 
-for config in configs:
-    try:
-        print(f"Testing: user='{config['user']}' db='{config['dbname']}' port={config['port']}...")
-        conn = psycopg2.connect(
-            dbname=config['dbname'],
-            user=config['user'],
-            password=config['password'],
-            host='localhost',
-            port=config['port']
-        )
-        print(f"SUCCESS: Connected with user='{config['user']}'")
-        conn.close()
-        sys.exit(0)
-    except Exception as e:
-        print(f"FAILED: user='{config['user']}' - {e}")
+for user in users:
+    for pwd in passwords:
+        try:
+            print(f"Testing: user='{user}' password='{pwd}' port={port}...")
+            conn = psycopg2.connect(
+                dbname=dbname,
+                user=user,
+                password=pwd,
+                host='localhost',
+                port=port
+            )
+            print(f"SUCCESS: Connected with user='{user}' and password='{pwd}'")
+            conn.close()
+            sys.exit(0)
+        except Exception as e:
+            print(f"FAILED: user='{user}' password='{pwd}' - {e}")
+
+print("All attempts failed.")

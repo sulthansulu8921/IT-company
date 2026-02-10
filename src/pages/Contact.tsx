@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ const Contact = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      
+
       <div className="flex-1">
         {/* Hero Section */}
         <section className="pt-32 pb-20 px-4 gradient-hero">

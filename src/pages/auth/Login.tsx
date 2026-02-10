@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { toast } from 'sonner';
 import { Link, useNavigate } from 'react-router-dom';
 
+import bg1 from "@/assets/bg1.jpeg";
+
 const Login = () => {
     const { login, isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
@@ -40,8 +42,19 @@ const Login = () => {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50">
-            <Card className="w-full max-w-md">
+        <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
+            {/* Background */}
+            <div className="absolute inset-0 z-0">
+                <img
+                    src={bg1}
+                    alt="Background"
+                    className="w-full h-full object-cover opacity-50"
+                />
+                <div className="absolute inset-0 tech-grid-bg opacity-40" />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/50 to-background" />
+            </div>
+
+            <Card className="relative z-10 w-full max-w-md mx-4 animate-fade-in backdrop-blur-sm bg-card/90">
                 <CardHeader>
                     <CardTitle>Welcome Back</CardTitle>
                     <CardDescription>Login to your account</CardDescription>

@@ -2,29 +2,42 @@ import os
 import django
 import sys
 import json
+from django.db.models import Q
 
 sys.path.append('/Users/sulthanshafeer/Desktop/startup/backend/server')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'server.settings')
 django.setup()
 
-from api.models import ProjectApplication, UserRole
-from api.serializers import ProjectApplicationSerializer
+from api.models import ProjectApplication, UserRole, Project, Task, Payment, Profile
+from api.serializers import ProjectApplicationSerializer, ProjectSerializer, TaskSerializer, PaymentSerializer
 from django.contrib.auth.models import User
-from rest_framework.test import APIRequestFactory
 
-# Get Admin User
-admin = User.objects.get(username='sulthan')
-print(f"Testing as user: {admin.username}, Role: {admin.profile.role}")
-
-# Test Queryset
-apps = ProjectApplication.objects.all()
-print(f"Total Applications: {apps.count()}")
-
-# Test Serializer
-serializer = ProjectApplicationSerializer(apps, many=True)
+# Test ALL data for serialization issues
 try:
-    data = serializer.data
-    print("Serialization Successful.")
-    print(json.dumps(data, default=str)[:500]) # Print first 500 chars
+    print("\n--- Testing All Data ---")
+    
+    all_projects = Project.objects.all()
+    print(f"Total Projects: {all_projects.count()}")
+    for p in all_projects:
+        print(f"Project: {p.title}, Status: {p.status}, Client: {p.client.username}")
+        try:
+            print(ProjectSerializer(p).data)
+        except Exception as e:
+            print(f"ERROR serializing Project {p.id}: {e}")
+
+    all_tasks = Task.objects.all()
+    print(f"Total Tasks: {all_tasks.count()}")
+    for t in all_tasks:
+        print(f"Task: {t.title}, Status: {t.status}, Assigned: {t.assigned_to.username if t.assigned_to else 'None'}")
+        try:
+             print(TaskSerializer(t).data)
+        except Exception as e:
+             print(f"ERROR serializing Task {t.id}: {e}")
+
+    # ... applications and payments are 0 so skip printing details for them
+    print("--- End Test ---")
+
 except Exception as e:
-    print(f"Serialization Failed: {e}")
+    print(f"Global FAILED: {e}")
+    import traceback
+    traceback.print_exc()

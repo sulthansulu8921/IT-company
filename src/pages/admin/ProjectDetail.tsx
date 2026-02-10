@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
@@ -80,6 +81,17 @@ const AdminProjectDetail = () => {
         }
     };
 
+    const handleDeleteTask = async (taskId: number) => {
+        if (!confirm("Are you sure you want to delete this task?")) return;
+        try {
+            await api.delete(`/tasks/${taskId}/`);
+            toast.success("Task deleted successfully");
+            fetchData();
+        } catch (error) {
+            toast.error("Failed to delete task");
+        }
+    };
+
     if (!project) return <div className="p-8">Loading...</div>;
 
     return (
@@ -127,6 +139,7 @@ const AdminProjectDetail = () => {
                             <div className="font-bold text-lg">{project.status}</div>
                         </div>
                         <div className="flex flex-col gap-2">
+                            <Button onClick={() => handleUpdateStatus(ProjectStatus.OPEN)} className="bg-blue-600 hover:bg-blue-700" disabled={project.status === ProjectStatus.OPEN}>Mark Open (Approve)</Button>
                             <Button onClick={() => handleUpdateStatus(ProjectStatus.IN_PROGRESS)} disabled={project.status === ProjectStatus.IN_PROGRESS}>Mark In Progress</Button>
                             <Button onClick={() => handleUpdateStatus(ProjectStatus.COMPLETED)} variant="default" className="bg-green-600 hover:bg-green-700" disabled={project.status === ProjectStatus.COMPLETED}>Mark Completed</Button>
                             <Button onClick={() => handleUpdateStatus(ProjectStatus.REJECTED)} variant="destructive" disabled={project.status === ProjectStatus.REJECTED}>Reject Project</Button>
@@ -145,11 +158,11 @@ const AdminProjectDetail = () => {
                     ) : (
                         <div className="space-y-4">
                             {applications.map(app => (
-                                <div key={app.id} className="flex justify-between items-center p-4 border rounded bg-gray-50">
+                                <div key={app.id} className="flex justify-between items-center p-4 border rounded bg-muted/40 hover:bg-muted/60 transition-colors">
                                     <div>
                                         <h4 className="font-bold">{app.developer_name}</h4>
-                                        <p className="text-sm text-gray-600">Status: <span className={app.status === 'Approved' ? 'text-green-600 font-bold' : app.status === 'Rejected' ? 'text-red-600' : 'text-yellow-600'}>{app.status}</span></p>
-                                        <p className="text-xs text-gray-500 text-muted-foreground">Applied on {new Date(app.created_at).toLocaleDateString()}</p>
+                                        <p className="text-sm text-foreground">Status: <span className={app.status === 'Approved' ? 'text-green-600 font-bold' : app.status === 'Rejected' ? 'text-red-600' : 'text-yellow-600'}>{app.status}</span></p>
+                                        <p className="text-xs text-muted-foreground">Applied on {new Date(app.created_at).toLocaleDateString()}</p>
                                     </div>
                                     <div className="flex gap-2">
                                         {app.status === 'Pending' && (
@@ -201,11 +214,13 @@ const AdminProjectDetail = () => {
                                                 <SelectValue placeholder="Select Developer" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {developers.map(dev => (
-                                                    <SelectItem key={dev.user.id} value={String(dev.user.id)}>
-                                                        {dev.user.username} ({dev.skills || 'No skills listed'})
-                                                    </SelectItem>
-                                                ))}
+                                                {developers
+                                                    .filter(dev => applications.some(app => app.developer === dev.user.id))
+                                                    .map(dev => (
+                                                        <SelectItem key={dev.user.id} value={String(dev.user.id)}>
+                                                            {dev.user.username} ({dev.skills || 'No skills listed'})
+                                                        </SelectItem>
+                                                    ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -223,15 +238,20 @@ const AdminProjectDetail = () => {
                     ) : (
                         <div className="space-y-4">
                             {tasks.map(task => (
-                                <div key={task.id} className="flex justify-between items-center p-4 border rounded bg-gray-50">
+                                <div key={task.id} className="flex justify-between items-center p-4 border rounded bg-muted/40 hover:bg-muted/60 transition-colors group">
                                     <div>
                                         <h4 className="font-bold">{task.title}</h4>
-                                        <p className="text-sm text-gray-600">Assigned to: {task.assigned_to_name}</p>
-                                        <p className="text-xs text-gray-500">Deadline: {task.deadline}</p>
+                                        <p className="text-sm text-foreground">Assigned to: {task.assigned_to_name}</p>
+                                        <p className="text-xs text-muted-foreground">Deadline: {task.deadline}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="font-bold text-green-600">${task.budget}</div>
-                                        <div className="text-xs bg-gray-200 px-2 py-1 rounded-full inline-block mt-1">{task.status}</div>
+                                    <div className="text-right flex items-center gap-4">
+                                        <div className="flex flex-col items-end">
+                                            <div className="font-bold text-green-600">${task.budget}</div>
+                                            <div className="text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full inline-block mt-1">{task.status}</div>
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeleteTask(task.id)}>
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
                                     </div>
                                 </div>
                             ))}

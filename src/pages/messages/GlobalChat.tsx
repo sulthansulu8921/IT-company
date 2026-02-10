@@ -55,8 +55,54 @@ const GlobalChat = () => {
 
     useEffect(() => {
         fetchConversations();
-        // Auto-refresh conversations periodically? For now, manual refresh on send.
+        // Auto-refresh conversations periodically
+        const interval = setInterval(fetchConversations, 10000);
+        return () => clearInterval(interval);
     }, []);
+
+    // Ensure Admin is always available to chat for non-admins
+    useEffect(() => {
+        const ensureAdminContact = async () => {
+            if (user?.role === 'Admin') return; // Admin doesn't need to chat with themselves (or maybe they do to test?)
+
+            try {
+                // Fetch admin details
+                const response = await api.get('/users/admin_contact/');
+                const adminProfile = response.data;
+                const adminId = adminProfile.user.id;
+
+                // Check if admin is already in conversations
+                const adminInConvo = conversations.find(c => c.user_id === adminId);
+
+                if (!adminInConvo) {
+                    // Add Admin to the TOP of the list
+                    const adminConversation: Conversation = {
+                        user_id: adminId,
+                        username: "Support (Admin)",
+                        last_message: "Start a new conversation",
+                        timestamp: new Date().toISOString()
+                    };
+                    setConversations(prev => [adminConversation, ...prev]);
+
+                    // If no active chat, select Admin
+                    if (!activePartnerId) {
+                        setActivePartnerId(adminId);
+                        setActivePartnerName("Support (Admin)");
+                    }
+                }
+            } catch (error) {
+                console.error("Could not fetch admin contact", error);
+            }
+        };
+
+        if (user && conversations.length === 0) { // Only force adding if list is empty or check logic inside
+            ensureAdminContact();
+        } else if (user && conversations.length > 0) {
+            // We could still add it if missing, but let's prioritize empty state fix first
+            ensureAdminContact();
+        }
+
+    }, [user, conversations.length]); // Dep on length to retry if list loads and admin is missing
 
     useEffect(() => {
         if (activePartnerId) {

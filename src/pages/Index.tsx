@@ -73,7 +73,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen">
-
+      <Navbar />
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Background */}
         <div className="absolute inset-0 z-0">

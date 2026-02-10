@@ -6,6 +6,7 @@ export enum UserRole {
 
 export enum ProjectStatus {
     PENDING = 'Pending',
+    OPEN = 'Open',
     IN_PROGRESS = 'In Progress',
     REVIEW = 'Review',
     COMPLETED = 'Completed',

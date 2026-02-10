@@ -28,7 +28,6 @@ services:
   - type: web
     name: startup-frontend
     env: static
-    region: oregon
     plan: free
     rootDir: .
     buildCommand: "npm install && npm run build"

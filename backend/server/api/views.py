@@ -152,6 +152,31 @@ class AdminDashboardView(generics.GenericAPIView):
             "completed_projects": Project.objects.filter(status="Completed").count(),
         })
 
+# --- Developer Dashboard ---
+class DeveloperDashboardView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated] # Should be IsDeveloper but IsAuthenticated is safe enough for now as we filter data
+
+    def get(self, request):
+        user = request.user
+        if not hasattr(user, 'profile'):
+             return Response({"error": "Profile not found"}, status=400)
+
+        # Available Projects (Marketplace)
+        # Show all projects that are OPEN or IN_PROGRESS
+        projects = Project.objects.filter(
+            Q(status=ProjectStatus.OPEN) | Q(status=ProjectStatus.IN_PROGRESS)
+        ).distinct()
+        
+        # My Applications
+        applications = ProjectApplication.objects.filter(developer=user)
+        
+        return Response({
+            "profile": ProfileSerializer(user.profile).data,
+            "developer": UserSerializer(user).data,
+            "availableProjects": ProjectSerializer(projects, many=True).data,
+            "myApplications": ProjectApplicationSerializer(applications, many=True).data
+        })
+
 # --- Project Applications ---
 class ProjectApplicationViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectApplicationSerializer

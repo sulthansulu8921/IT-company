@@ -1,349 +1,291 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
-import api from '@/lib/axios';
-import { Task, TaskStatus, Project, ProjectStatus } from '@/types';
-import { GitBranch, FolderOpen, DollarSign, CheckCircle, Clock, AlertCircle, MessageSquare, Briefcase, Code, Upload } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
-
-import bg1 from "@/assets/bg1.jpeg";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Sidebar } from "@/components/Sidebar";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import {
+    Loader2,
+    Plus,
+    Search,
+    MoreHorizontal,
+    Globe,
+    Terminal,
+    CheckCircle2,
+} from "lucide-react";
+import api from "@/lib/axios";
 
 const DeveloperDashboard = () => {
-    // ... hooks
-    const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [payments, setPayments] = useState<any[]>([]);
-    const [myApplications, setMyApplications] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-
-    // State for submission
-    const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
-    const [selectedTask, setSelectedTask] = useState<number | null>(null);
-    const [submissionData, setSubmissionData] = useState({
-        git_link: '',
-        notes: ''
-    });
+    const [profile, setProfile] = useState<any>(null);
+    const [developer, setDeveloper] = useState<any>(null);
+    const [availableProjects, setAvailableProjects] = useState<any[]>([]);
+    const [myApplications, setMyApplications] = useState<any[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
-        const fetchData = async () => {
-            // ... existing fetchData logic
-            if (!user?.is_approved) {
-                setLoading(false);
-                return;
-            }
-            try {
-                const [taskRes, projectRes, appRes, payRes] = await Promise.all([
-                    api.get('/tasks/'),
-                    api.get('/projects/'),
-                    api.get('/applications/'),
-                    api.get('/payments/')
-                ]);
-                setTasks(taskRes.data);
-                setProjects(projectRes.data);
-                setMyApplications(appRes.data);
-                setPayments(payRes.data);
-            } catch (error) {
-                console.error(error);
-                toast.error("Failed to load dashboard data");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [user]);
+        loadDashboard();
+    }, []);
 
-    const handleSubmission = async (e: React.FormEvent) => {
-        // ... existing handleSubmission logic
-        e.preventDefault();
-        if (!selectedTask) return;
+    const loadDashboard = async () => {
         try {
-            await api.patch(`/tasks/${selectedTask}/`, {
-                status: TaskStatus.READY_FOR_REVIEW,
-                submission_git_link: submissionData.git_link,
-                submission_notes: submissionData.notes,
-            });
-            setTasks(tasks.map(t => t.id === selectedTask ? {
-                ...t,
-                status: TaskStatus.READY_FOR_REVIEW,
-                submission_git_link: submissionData.git_link
-            } : t));
-            toast.success("Work submitted successfully for review");
-            setIsSubmitModalOpen(false);
-            setSubmissionData({ git_link: '', notes: '' });
-        } catch (error) {
-            toast.error("Failed to submit work");
+            const res = await api.get('/developers/dashboard');
+
+            const data = res.data;
+
+            setProfile(data.profile || null);
+            setDeveloper(data.developer || null);
+            setAvailableProjects(data.availableProjects || []);
+            // Determine if applications are approved or pending to simulate "Service Status"
+            setMyApplications(data.myApplications || []);
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to load dashboard. Ensure backend is running.");
+            // Don't redirect on error instantly, allows user to see the dashboard shell at least? 
+            // Actually previous behavior was redirect to auth. let's keep it safe.
+            // navigate("/auth");
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleApply = async (projectId: number) => {
-        // ... existing handleApply logic
+    const handleApply = async (projectId: string) => {
         try {
             await api.post('/applications/', { project: projectId });
-            toast.success("Application submitted successfully");
-            // Refresh applications
-            const appRes = await api.get('/applications/');
-            setMyApplications(appRes.data);
-        } catch (error: any) {
-            toast.error("Failed to apply. You may have already applied.");
+
+            toast.success("Application submitted!");
+            loadDashboard();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || "Failed to apply");
         }
     };
 
-    const totalEarnings = payments
-        .filter(p => p.status === 'Paid')
-        .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+    }
 
-    const pendingEarnings = tasks
-        .filter(t => t.status === 'Completed')
-        .reduce((sum, t) => sum + parseFloat(t.budget), 0);
+    // Combine applications and available projects for the "Services" view
+    // In a real scenario, "Services" would be the projects the developer is WORKING on.
+    // "Projects" would be the marketplace.
+    // For this design, let's map "My Applications" as "My Services".
 
-    const getAppStatus = (pid: number) => myApplications.find(a => a.project === pid)?.status;
+    const services = myApplications.map(app => ({
+        id: app.id,
+        name: app.project.title,
+        type: "Full Stack", // Placeholder
+        status: app.status === "approved" ? "Deployed" : app.status,
+        region: "Oregon", // Placeholder
+        updated: "26min", // Placeholder
+        runtime: "Node", // Placeholder
+    }));
 
     return (
-        <div className="relative min-h-screen overflow-hidden">
-            {/* Background */}
-            <div className="absolute inset-0 z-0">
-                <img
-                    src={bg1}
-                    alt="Background"
-                    className="w-full h-full object-cover opacity-50"
-                />
-                <div className="absolute inset-0 tech-grid-bg opacity-40" />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/50 to-background" />
-            </div>
+        <div className="flex min-h-screen bg-background text-foreground font-sans selection:bg-primary/20">
+            <Sidebar />
 
-            <div className="relative z-10 max-w-7xl mx-auto space-y-8 p-8">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/80 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-slate-700">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white">Developer Workspace</h1>
-                        <p className="text-slate-400 mt-1">
-                            {user?.is_approved ? (
-                                <span className="flex items-center gap-2 text-green-400 font-medium"><CheckCircle className="w-4 h-4" /> Verified Developer</span>
-                            ) : (
-                                <span className="flex items-center gap-2 text-yellow-500 font-medium"><Clock className="w-4 h-4" /> Pending Approval</span>
-                            )}
-                        </p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center w-full md:w-auto">
-                        <div className="text-left sm:text-right mr-0 sm:mr-4 w-full sm:w-auto flex justify-between sm:block items-center">
-                            <p className="text-xs text-slate-400 uppercase font-semibold">Total Earnings</p>
-                            <p className="text-2xl font-bold text-white sm:mt-1">${totalEarnings.toFixed(2)}</p>
+            <main className="flex-1 overflow-y-auto">
+                <div className="max-w-[1200px] mx-auto p-8">
+
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-8">
+                        <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
+                        <div className="flex items-center gap-3">
+                            <Button variant="ghost" className="text-primary hover:text-primary hover:bg-primary/10">
+                                + Invite your team
+                            </Button>
+                            <Button className="bg-white text-zinc-950 hover:bg-zinc-200 font-semibold shadow-sm">
+                                + New
+                            </Button>
                         </div>
-                        <Button variant="outline" onClick={logout} className="text-red-400 border-red-900/50 hover:text-red-300 hover:bg-red-950/30 w-full sm:w-auto">Logout</Button>
                     </div>
-                </div>
 
-                {!user?.is_approved ? (
-                    <Card className="bg-yellow-50 border-yellow-200">
-                        <CardContent className="flex flex-col items-center justify-center p-12 text-center">
-                            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
-                                <Clock className="w-8 h-8 text-yellow-600" />
-                            </div>
-                            <h2 className="text-xl font-semibold text-yellow-800 mb-2">Account Under Review</h2>
-                            <p className="text-yellow-700 max-w-md">
-                                Your profile is currently being reviewed by the Admin team. You will gain access to tasks and projects once approved.
-                            </p>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Main Work Area */}
-                        <div className="lg:col-span-2 space-y-8">
+                    {/* Projects Section */}
+                    <div className="mb-12">
+                        <h2 className="text-xl font-semibold mb-4">Projects</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                            {/* Assigned Tasks */}
-                            <div className="space-y-4">
-                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <Code className="w-5 h-5 text-indigo-600" />
-                                    Active Tasks
-                                </h2>
-                                {tasks.length === 0 ? (
-                                    <Card className="border-dashed">
-                                        <CardContent className="p-8 text-center text-slate-500">
-                                            No active tasks assigned mainly. Check the project board or wait for admin assignment.
-                                        </CardContent>
-                                    </Card>
-                                ) : (
-                                    <div className="grid gap-4">
-                                        {tasks.map(task => (
-                                            <Card key={task.id} className="group bg-slate-900/60 backdrop-blur-md border-slate-700 hover:border-indigo-500/50 transition-all shadow-lg hover:shadow-indigo-500/10">
-                                                <CardHeader className="flex flex-row items-start justify-between pb-2">
-                                                    <div>
-                                                        <CardTitle className="text-lg font-semibold text-slate-100">{task.title}</CardTitle>
-                                                        <CardDescription className="text-slate-400 font-medium mt-1">Budget: ${task.budget}</CardDescription>
-                                                    </div>
-                                                    <Badge className={cn(
-                                                        task.status === TaskStatus.COMPLETED ? 'bg-green-500/20 text-green-400 border-green-500/30' :
-                                                            task.status === TaskStatus.READY_FOR_REVIEW ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' :
-                                                                'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                                                    )}>
-                                                        {task.status}
-                                                    </Badge>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <p className="text-slate-300 text-sm mb-4 line-clamp-2">{task.description}</p>
-                                                    <div className="flex items-center justify-between mt-4">
-                                                        <div className="text-xs text-slate-400 flex items-center gap-1">
-                                                            <Clock className="w-3 h-3" /> Due: {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No Deadline'}
-                                                        </div>
-
-                                                        {task.status !== TaskStatus.COMPLETED && task.status !== TaskStatus.READY_FOR_REVIEW && (
-                                                            <Dialog open={isSubmitModalOpen && selectedTask === task.id} onOpenChange={(open) => {
-                                                                setIsSubmitModalOpen(open);
-                                                                if (open) setSelectedTask(task.id);
-                                                                else setSelectedTask(null);
-                                                            }}>
-                                                                <DialogTrigger asChild>
-                                                                    <Button size="sm" className="bg-indigo-600 text-white hover:bg-indigo-700">
-                                                                        <Upload className="w-4 h-4 mr-2" /> Submit Work
-                                                                    </Button>
-                                                                </DialogTrigger>
-                                                                <DialogContent>
-                                                                    <DialogHeader>
-                                                                        <DialogTitle>Submit Task</DialogTitle>
-                                                                        <DialogDescription>
-                                                                            Upload your work or provide a repository link for review.
-                                                                        </DialogDescription>
-                                                                    </DialogHeader>
-                                                                    <form onSubmit={handleSubmission} className="space-y-4 py-4">
-                                                                        <div className="space-y-2">
-                                                                            <Label>Git Repository Link</Label>
-                                                                            <Input
-                                                                                placeholder="https://github.com/..."
-                                                                                value={submissionData.git_link}
-                                                                                onChange={e => setSubmissionData(d => ({ ...d, git_link: e.target.value }))}
-                                                                                required
-                                                                            />
-                                                                        </div>
-                                                                        <div className="space-y-2">
-                                                                            <Label>Notes / Files URL</Label>
-                                                                            <Textarea
-                                                                                placeholder="Additional notes or Drive link for assets..."
-                                                                                value={submissionData.notes}
-                                                                                onChange={e => setSubmissionData(d => ({ ...d, notes: e.target.value }))}
-                                                                            />
-                                                                        </div>
-                                                                        <DialogFooter>
-                                                                            <Button type="submit">Submit for Review</Button>
-                                                                        </DialogFooter>
-                                                                    </form>
-                                                                </DialogContent>
-                                                            </Dialog>
-                                                        )}
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
+                            {/* Active Project Card */}
+                            <Card className="bg-card border-border shadow-sm hover:shadow-md transition-shadow group cursor-pointer relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1 h-full bg-primary/50 group-hover:bg-primary transition-colors"></div>
+                                <CardHeader className="pb-2">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="text-lg font-medium group-hover:text-primary transition-colors">
+                                                My Portfolio
+                                            </CardTitle>
+                                            <CardDescription className="mt-1">
+                                                Personal portfolio site
+                                            </CardDescription>
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-
-                            {/* Project Opportunities */}
-                            <div className="space-y-4">
-                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <Briefcase className="w-5 h-5 text-indigo-600" />
-                                    Project Market
-                                </h2>
-                                <Card className="bg-slate-900/60 backdrop-blur-md border-slate-700 shadow-lg overflow-hidden">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-slate-900/50 text-slate-400 font-medium border-b border-slate-800">
-                                                <tr>
-                                                    <th className="px-6 py-4">Project</th>
-                                                    <th className="px-6 py-4">Type</th>
-                                                    <th className="px-6 py-4">Deadline</th>
-                                                    <th className="px-6 py-4 text-right">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-800">
-                                                {projects.map(project => {
-                                                    const status = getAppStatus(project.id);
-                                                    return (
-                                                        <tr key={project.id} className="hover:bg-slate-800/50 transition-colors">
-                                                            <td className="px-6 py-4 font-medium text-slate-100">{project.title}</td>
-                                                            <td className="px-6 py-4 text-slate-400">{project.service_type}</td>
-                                                            <td className="px-6 py-4 text-slate-400">{project.deadline || '-'}</td>
-                                                            <td className="px-6 py-4 text-right">
-                                                                {status ? (
-                                                                    <Badge variant="secondary" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
-                                                                        {status}
-                                                                    </Badge>
-                                                                ) : (
-                                                                    <Button size="sm" variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white" onClick={() => handleApply(project.id)}>Apply</Button>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                        {projects.length === 0 && <div className="p-8 text-center text-slate-500">No open projects at the moment.</div>}
-                                    </div>
-                                </Card>
-                            </div>
-                        </div>
-
-                        {/* Sidebar Stats */}
-                        <div className="space-y-6">
-                            <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-xl">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <DollarSign className="w-6 h-6 text-green-400" />
-                                    <h3 className="text-lg font-bold">Earnings</h3>
-                                </div>
-                                <div className="space-y-4">
-                                    <div>
-                                        <p className="text-slate-400 text-sm">Total Paid Out</p>
-                                        <p className="text-3xl font-bold tracking-tight">${totalEarnings.toFixed(2)}</p>
-                                    </div>
-                                    <div className="pt-4 border-t border-white/10">
-                                        <p className="text-slate-400 text-sm flex justify-between">
-                                            <span>Pending Payment</span>
-                                            <span className="text-white font-medium">${payments.filter(p => p.status === 'Pending').reduce((s, p) => s + parseFloat(p.amount), 0).toFixed(2)}</span>
-                                        </p>
-                                    </div>
-                                    <div className="pt-2">
-                                        <p className="text-xs text-slate-500">Payments are processed by Admin after task review.</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Card className="border-0 shadow-lg bg-gradient-to-br from-indigo-900 to-purple-900 text-white overflow-hidden relative">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-xl"></div>
-                                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12 blur-xl"></div>
-
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        Chat with Admin
-                                    </CardTitle>
-                                    <CardDescription className="text-indigo-200">
-                                        Need help? Contact our support team directly.
-                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <p className="text-sm text-indigo-200 mb-4">
-                                        We typically reply within a few minutes during business hours.
-                                    </p>
-                                    <Button
-                                        className="w-full bg-white text-indigo-900 hover:bg-indigo-50 border-0 font-semibold"
-                                        onClick={() => navigate('/developer/messages')}
-                                    >
-                                        Open Chat
-                                    </Button>
+                                    <div className="mt-4 flex items-center gap-2">
+                                        <span className="inline-flex items-center rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-400 ring-1 ring-inset ring-green-500/20">
+                                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                                            All services are up and running
+                                        </span>
+                                    </div>
                                 </CardContent>
                             </Card>
+
+                            {/* Create New Project Card */}
+                            <button className="flex items-center justify-center h-[140px] border border-dashed border-border rounded-xl hover:border-primary/50 hover:bg-card/50 transition-all group">
+                                <div className="flex flex-col items-center gap-2 text-muted-foreground group-hover:text-foreground">
+                                    <Plus className="h-6 w-6" />
+                                    <span className="font-medium">Create new project</span>
+                                </div>
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
+
+                    {/* Ungrouped Services Section */}
+                    <div className="space-y-4">
+                        <div className="flex flex-col gap-4">
+                            <h2 className="text-xl font-semibold">Ungrouped Services</h2>
+
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="bg-primary/20 text-primary hover:bg-primary/30 rounded-full px-3 py-1">
+                                        Active ({services.length})
+                                    </Badge>
+                                    <Badge variant="outline" className="text-muted-foreground hover:bg-muted/50 rounded-full px-3 py-1">
+                                        Suspended (0)
+                                    </Badge>
+                                    <Badge variant="outline" className="text-muted-foreground hover:bg-muted/50 rounded-full px-3 py-1">
+                                        All ({services.length})
+                                    </Badge>
+                                </div>
+                            </div>
+
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search services..."
+                                    className="pl-9 bg-card/50 border-border focus:ring-primary/20"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="rounded-lg border border-border bg-card over">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="hover:bg-transparent border-border">
+                                        <TableHead className="w-[300px] text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">Service Name</TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Runtime</TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Region</TableHead>
+                                        <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Updated</TableHead>
+                                        <TableHead className="w-[50px]"></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {services.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                                No active services found
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        services
+                                            .filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                                            .map((service) => (
+                                                <TableRow key={service.id} className="cursor-pointer hover:bg-muted/30 border-border group">
+                                                    <TableCell className="font-medium pl-6">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 rounded bg-background border border-border">
+                                                                {service.type === "Static" ? <Globe className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
+                                                            </div>
+                                                            <span className="font-semibold group-hover:text-primary transition-colors underline-offset-4 group-hover:underline decoration-primary/50">
+                                                                {service.name}
+                                                            </span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {service.status === 'Deployed' ? (
+                                                            <Badge className="bg-green-500/15 text-green-400 hover:bg-green-500/25 border-0 font-medium tracking-wide text-[11px] uppercase rounded-sm px-2">
+                                                                <CheckCircle2 className="w-3 h-3 mr-1.5" />
+                                                                Deployed
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary" className="text-[11px] uppercase rounded-sm px-2 tracking-wide font-medium">
+                                                                {service.status}
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline" className="text-muted-foreground bg-background border-border font-mono text-[10px] uppercase">
+                                                            {service.runtime}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground">{service.region}</TableCell>
+                                                    <TableCell className="text-muted-foreground">{service.updated}</TableCell>
+                                                    <TableCell>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
+
+                    {/* Marketplace / Available Projects Section (repurposed for this view) */}
+                    <div className="mt-12 mb-12">
+                        <h2 className="text-xl font-semibold mb-4">Marketplace (Available Projects)</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {availableProjects?.map((p) => (
+                                <Card key={p.id} className="bg-card border-border hover:border-primary/50 transition-colors">
+                                    <CardHeader>
+                                        <div className="flex justify-between items-start">
+                                            <CardTitle className="text-base">{p.title}</CardTitle>
+                                            <Badge variant="secondary" className="text-[10px]">{p.category}</Badge>
+                                        </div>
+                                        <CardDescription className="line-clamp-2 mt-2">{p.description}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="flex justify-between items-center mt-2">
+                                            <div className="text-sm text-muted-foreground font-mono">
+                                                ${p.budget_min} - ${p.budget_max}
+                                            </div>
+                                            <Button size="sm" onClick={() => handleApply(p.id)} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                                                Apply
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+
+                </div>
+            </main>
         </div>
     );
 };

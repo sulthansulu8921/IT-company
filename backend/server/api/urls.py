@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
-    RegisterView, UserDetailView, AdminDashboardView, UserViewSet,
+    RegisterView, UserDetailView, AdminDashboardView, DeveloperDashboardView, UserViewSet,
     ProjectViewSet, TaskViewSet, MessageViewSet, PaymentViewSet, ProjectApplicationViewSet
 )
 
@@ -24,6 +24,7 @@ urlpatterns = [
     
     # Admin
     path("admin/stats/", AdminDashboardView.as_view(), name="admin_stats"),
+    path("developers/dashboard/", DeveloperDashboardView.as_view(), name="developer_dashboard"),
 
     # ViewSets
     path("", include(router.urls)),

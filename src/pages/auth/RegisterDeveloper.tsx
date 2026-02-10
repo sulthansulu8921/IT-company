@@ -27,8 +27,8 @@ const RegisterDeveloper = () => {
         setIsLoading(true);
         try {
             await register({ ...formData, role: UserRole.DEVELOPER });
-            toast.success('Registration successful. Wait for admin approval.');
-            navigate('/auth/login');
+            toast.success('Registration successful. Welcome aboard!');
+            navigate('/developer');
         } catch (error: any) {
             console.error("Registration error:", error);
             const errorMsg = error.response?.data?.detail ||

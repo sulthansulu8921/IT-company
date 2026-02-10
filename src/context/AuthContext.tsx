@@ -8,7 +8,7 @@ interface AuthContextType {
     isAuthenticated: boolean;
     isLoading: boolean;
     login: (data: any) => Promise<void>;
-    register: (data: any) => Promise<void>;
+    register: (data: any) => Promise<any>;
     logout: () => void;
 }
 
@@ -60,9 +60,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const register = async (data: any) => {
-        await api.post('/auth/register/', data);
-        // Auto login ideally, or redirect to login. For now direct to login
-        navigate('/auth/login');
+        const response = await api.post('/auth/register/', data);
+        return response;
     };
 
     const logout = () => {

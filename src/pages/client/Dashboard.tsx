@@ -51,8 +51,8 @@ const ClientDashboard = () => {
                 api.get('/projects/'),
                 api.get('/tasks/')
             ]);
-            setProjects(projRes.data);
-            setTasks(taskRes.data);
+            setProjects(projRes.data || []);
+            setTasks(taskRes.data || []);
         } catch (error) {
             console.error("Failed to fetch data", error);
         } finally {

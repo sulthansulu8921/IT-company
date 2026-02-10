@@ -11,7 +11,7 @@ import { UserRole } from '@/types';
 import bg1 from "@/assets/bg1.jpeg";
 
 const RegisterDeveloper = () => {
-    const { register } = useAuth();
+    const { register, login } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         username: '', password: '', email: '', first_name: '', last_name: ''
@@ -27,8 +27,11 @@ const RegisterDeveloper = () => {
         setIsLoading(true);
         try {
             await register({ ...formData, role: UserRole.DEVELOPER });
-            toast.success('Registration successful. Welcome aboard!');
-            navigate('/developer');
+            toast.success('Registration successful. Logging you in...');
+
+            // Auto login
+            await login({ username: formData.username, password: formData.password });
+            // login function handles navigation
         } catch (error: any) {
             console.error("Registration error:", error);
             const errorMsg = error.response?.data?.detail ||

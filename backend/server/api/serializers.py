@@ -36,6 +36,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         profile = user.profile
         profile.role = role
         profile.save()
+        user.role = role
         return user
 
 class ProjectApplicationSerializer(serializers.ModelSerializer):

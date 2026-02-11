@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import {
     LayoutGrid,
@@ -34,6 +35,7 @@ interface SidebarProps {
 export function Sidebar({ className }: SidebarProps) {
     const navigate = useNavigate();
     const location = useLocation();
+    const { logout } = useAuth();
 
     const navItems = [
         {
@@ -180,10 +182,7 @@ export function Sidebar({ className }: SidebarProps) {
                 <Button
                     variant="ghost"
                     className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => {
-                        localStorage.removeItem("token");
-                        navigate("/auth");
-                    }}
+                    onClick={logout}
                 >
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign out

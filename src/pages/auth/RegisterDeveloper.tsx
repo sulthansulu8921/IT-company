@@ -62,15 +62,9 @@ const RegisterDeveloper = () => {
                 // We continue as auth user exists.
             }
 
-            // 3. Handle Email Confirmation vs Auto-Login
-            // If session is null, email confirmation is required.
-            if (!authData.session) {
-                toast.success('Registration successful! Please check your email to verify your account.');
-                navigate("/auth/login");
-            } else {
-                toast.success('Registration successful!');
-                navigate("/developer-dashboard");
-            }
+            // 3. Auto-Login / Navigation
+            toast.success('Registration successful!');
+            navigate("/developer-dashboard");
         } catch (error: any) {
             console.error("Registration error:", error);
             const errorMsg = error.message || 'Registration failed.';

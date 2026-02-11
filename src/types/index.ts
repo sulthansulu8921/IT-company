@@ -22,7 +22,7 @@ export enum TaskStatus {
 }
 
 export interface User {
-    id: number;
+    id: string; // UUID
     username: string;
     email: string;
     first_name: string;
@@ -30,8 +30,11 @@ export interface User {
 }
 
 export interface Profile {
-    id: number;
-    user: User;
+    id: string; // UUID
+    username: string; // Flattened from user
+    email: string;
+    first_name: string;
+    last_name: string;
     role: UserRole;
     skills?: string;
     experience?: string;
@@ -50,7 +53,7 @@ export interface Project {
     budget?: string; // Decimal comes as string from API usually
     deadline?: string;
     status: ProjectStatus;
-    client: number;
+    client: string; // UUID
     client_name: string;
     created_at: string;
 }
@@ -61,7 +64,7 @@ export interface Task {
     description: string;
     project: number;
     project_title: string;
-    assigned_to: number;
+    assigned_to: string; // UUID
     assigned_to_name: string;
     budget: string;
     deadline: string;
@@ -73,9 +76,9 @@ export interface Task {
 
 export interface Message {
     id: number;
-    sender: number;
+    sender: string; // UUID
     sender_name: string;
-    receiver: number;
+    receiver: string; // UUID
     receiver_name: string;
     content: string;
     created_at: string;
@@ -83,9 +86,9 @@ export interface Message {
 
 export interface Payment {
     id: number;
-    payer: number;
+    payer: string; // UUID
     payer_name: string;
-    payee?: number;
+    payee?: string; // UUID
     payee_name?: string;
     amount: string;
     payment_type: 'Incoming' | 'Payout';
@@ -96,7 +99,7 @@ export interface ProjectApplication {
     id: number;
     project: number;
     project_title: string;
-    developer: number;
+    developer: string; // UUID
     developer_name: string;
     cover_letter?: string;
     status: 'Pending' | 'Approved' | 'Rejected';

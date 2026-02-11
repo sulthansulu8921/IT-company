@@ -30,13 +30,11 @@ const RegisterDeveloper = () => {
             toast.success('Registration successful. Logging you in...');
 
             // Auto login
-            await login({ username: formData.username, password: formData.password });
+            await login({ username: formData.email, password: formData.password });
             // login function handles navigation
         } catch (error: any) {
             console.error("Registration error:", error);
-            const errorMsg = error.response?.data?.detail ||
-                (typeof error.response?.data === 'object' ? JSON.stringify(error.response?.data) : null) ||
-                'Registration failed.';
+            const errorMsg = error.message || 'Registration failed.';
             toast.error(errorMsg);
         } finally {
             setIsLoading(false);

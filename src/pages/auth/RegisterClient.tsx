@@ -11,7 +11,7 @@ import { UserRole } from '@/types';
 import bg1 from "@/assets/bg1.jpeg";
 
 const RegisterClient = () => {
-    const { register } = useAuth();
+    const { register, login } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         username: '', password: '', email: '', first_name: '', last_name: ''
@@ -21,16 +21,19 @@ const RegisterClient = () => {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         try {
             await register({ ...formData, role: UserRole.CLIENT });
-            toast.success('Registration successful. Please login.');
-            navigate('/auth/login');
+            toast.success('Registration successful. Logging you in...');
+
+            // Auto login
+            await login({ username: formData.email, password: formData.password });
         } catch (error: any) {
-            toast.error('Registration failed. ' + (error.response?.data?.username || 'Try again.'));
+            console.error("Registration error:", error);
+            const errorMsg = error.message || 'Registration failed.';
+            toast.error(errorMsg);
         } finally {
             setIsLoading(false);
         }

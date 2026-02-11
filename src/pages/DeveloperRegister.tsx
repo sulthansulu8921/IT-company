@@ -16,7 +16,7 @@ import { Footer } from "@/components/Footer";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const API_URL = "http://localhost:5000/api";
+import { supabase } from "@/lib/supabase";
 
 const DeveloperRegister = () => {
   const navigate = useNavigate();
@@ -57,37 +57,67 @@ const DeveloperRegister = () => {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/developers/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...formData,
-          skills: selectedSkills,
-          preferredJobTypes: selectedJobTypes,
-          hourlyRate: formData.hourlyRate
-            ? Number(formData.hourlyRate)
-            : null,
-          portfolioLinks: formData.portfolioLinks
-            ? formData.portfolioLinks.split(",").map((l) => l.trim())
-            : [],
-        }),
+      const nameParts = formData.fullName.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      // 1. Sign Up
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            role: 'Developer'
+          }
+        }
       });
 
-      const data = await res.json();
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("Registration failed");
 
-      if (!res.ok) {
-        throw new Error(data.message || "Registration failed");
+      // 2. Update Profile
+      // Map fields to Profile columns
+      // Profile has: skills (string), experience (string), portfolio (string)
+      // We'll store formatted data.
+      const skillsStr = selectedSkills.join(', ');
+      const portfolioStr = formData.portfolioLinks; // It's already a string input in state, wait. 
+      // In original code: formData.portfolioLinks was string, but split later?
+      // "portfolioLinks: formData.portfolioLinks ? formData.portfolioLinks.split(",").map((l) => l.trim()) : []"
+      // If I store it as string, I don't need to split unless validation.
+
+      const experienceStr = `
+Experience: ${formData.experience}
+Bio: ${formData.bio}
+Hourly Rate: ${formData.hourlyRate}
+Availability: ${formData.availability}
+Job Types: ${selectedJobTypes.join(', ')}
+            `.trim();
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          phone: formData.phone,
+          role: 'Developer',
+          skills: skillsStr,
+          experience: experienceStr,
+          portfolio: formData.portfolioLinks, // Assuming it's a comma separated string from input
+          is_approved: false // Developers approval needed
+        })
+        .eq('id', authData.user.id);
+
+      if (profileError) {
+        // Retry or log?
+        console.error("Profile update failed", profileError);
+        // We might want to alert user but signup succeeded.
       }
 
-      // Save JWT if backend sends it
-      if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
+      toast.success("Registration successful! Please check your email to verify account.");
+      navigate("/auth");
 
-      toast.success("Registration successful!");
-      navigate("/developer-dashboard");
     } catch (error: any) {
       toast.error(error.message || "Something went wrong");
     } finally {

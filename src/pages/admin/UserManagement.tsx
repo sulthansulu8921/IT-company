@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import api from '@/lib/axios';
+import { supabase } from "@/lib/supabase";
 import { Profile, UserRole } from '@/types';
 
 const UserManagement = () => {
@@ -12,10 +12,15 @@ const UserManagement = () => {
 
     const fetchUsers = async () => {
         try {
-            const response = await api.get('/users/');
-            setUsers(response.data);
-        } catch (error) {
-            toast.error("Failed to fetch users");
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setUsers(data || []);
+        } catch (error: any) {
+            toast.error("Failed to fetch users: " + error.message);
         } finally {
             setIsLoading(false);
         }
@@ -25,24 +30,38 @@ const UserManagement = () => {
         fetchUsers();
     }, []);
 
-    const handleApprove = async (id: number) => {
+    const handleApprove = async (id: string) => {
         try {
-            await api.patch(`/users/${id}/`, { is_approved: true });
+            const { error } = await supabase
+                .from('profiles')
+                .update({ is_approved: true })
+                .eq('id', id);
+
+            if (error) throw error;
             toast.success("Developer approved");
             fetchUsers();
-        } catch (error) {
-            toast.error("Failed to approve developer");
+        } catch (error: any) {
+            toast.error("Failed to approve developer: " + error.message);
         }
     };
 
-    const deleteUser = async (id: number) => {
-        if (!confirm("Are you sure you want to delete this user?")) return;
+    const deleteUser = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this user? This cannot be undone.")) return;
         try {
-            await api.delete(`/users/${id}/`);
-            toast.success("User deleted");
+            // Note: Deleting from profiles might fail if RLS prevents it.
+            // Ideally we delete from auth.users using an Edge Function.
+            // For now, let's try deleting profile row.
+            const { error } = await supabase
+                .from('profiles')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            toast.success("User profile deleted");
             fetchUsers();
-        } catch (error) {
-            toast.error("Failed to delete user");
+        } catch (error: any) {
+            console.error(error);
+            toast.error("Failed to delete user. You may need Admin permissions on Supabase.");
         }
     }
 
@@ -72,7 +91,7 @@ const UserManagement = () => {
                                 </TableRow>
                             ) : users.map((u) => (
                                 <TableRow key={u.id}>
-                                    <TableCell>{u.user.username}</TableCell>
+                                    <TableCell>{u.username}</TableCell>
                                     <TableCell>{u.role}</TableCell>
                                     <TableCell>
                                         {u.role === UserRole.DEVELOPER ? (

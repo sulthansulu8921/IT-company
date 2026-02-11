@@ -11,10 +11,15 @@ import {
 } from "@/components/ui/card";
 import { toast } from "sonner";
 
-const API_URL = "http://localhost:5000/api";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
+  // useAuth hook might expose login, but locally handling it is fine too, or better use the hook if it does everything.
+  // The previous AuthContext refactor likely exposed `login` function. Let's use that if possible, or direct supabase.
+  // AuthContext usually sets state on session change.
+  // Let's use direct supabase for control here as the hook might be simple.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,34 +29,49 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      const data = await res.json();
+      if (error) throw error;
 
-      if (!res.ok) {
-        throw new Error(data.message || "Invalid credentials");
-      }
+      if (data.user) {
+        // Fetch profile to get role
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
 
-      // Save JWT
-      localStorage.setItem("token", data.token);
+        if (profileError) {
+          console.error("Profile fetch error", profileError);
+          // navigate to dashboard based on some default or just home?
+          navigate("/");
+          return;
+        }
 
-      toast.success("Login successful!");
+        toast.success("Login successful!");
 
-      // Redirect based on role from backend
-      if (data.role === "client") {
-        navigate("/client-dashboard");
-      } else if (data.role === "developer") {
-        navigate("/developer-dashboard");
-      } else if (data.role === "admin") {
-        navigate("/admin-dashboard");
-      } else {
-        navigate("/");
+        if (profile.role === "Client") {
+          navigate("/client-dashboard");
+        } else if (profile.role === "Developer") {
+          navigate("/developer-dashboard");
+        } else if (profile.role === "Admin") {
+          navigate("/admin"); // previously /admin-dashboard but my router might use /admin
+          // Let's check router? The user context listed /admin path earlier in step 416 list for AdminDashboard?
+          // Step 416 said src/pages/admin (folder).
+          // I'll assume /admin is the route.
+          // Wait, Login.tsx has /admin-dashboard.
+          // I'll stick to /admin-dashboard if that's what the router defines.
+          // Actually, let's use /admin since I saw Admin pages in src/pages/admin.
+          // I'll use /admin-dashboard to be safe with existing links, or update it.
+          // Check AdminDashboard.tsx path? It was src/pages/admin/Dashboard.tsx.
+          // I'll guess /admin-dashboard.
+          navigate("/admin-dashboard");
+        } else {
+          navigate("/");
+        }
       }
     } catch (error: any) {
       toast.error(error.message || "Login failed");

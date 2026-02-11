@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import api from '@/lib/axios';
 import { ProjectApplication } from '@/types';
 import { useNavigate } from 'react-router-dom';
+
+import { supabase } from "@/lib/supabase";
 
 const AdminApplicationsList = () => {
     const navigate = useNavigate();
@@ -14,10 +15,23 @@ const AdminApplicationsList = () => {
 
     const fetchApplications = async () => {
         try {
-            const res = await api.get('/applications/');
-            setApplications(res.data);
-        } catch (error) {
-            toast.error("Failed to load applications");
+            const { data, error } = await supabase
+                .from('project_applications')
+                .select('*, developer:profiles(username, first_name, last_name), project:projects(title)')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const formattedApps = data?.map((app: any) => ({
+                ...app,
+                developer_name: app.developer ? (app.developer.first_name ? `${app.developer.first_name} ${app.developer.last_name}` : app.developer.username) : 'Unknown',
+                project_title: app.project?.title || 'Unknown Project'
+            })) || [];
+
+            setApplications(formattedApps);
+        } catch (error: any) {
+            console.error(error);
+            toast.error("Failed to load applications: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -29,21 +43,31 @@ const AdminApplicationsList = () => {
 
     const handleApprove = async (appId: number) => {
         try {
-            await api.post(`/applications/${appId}/approve/`);
+            const { error } = await supabase
+                .from('project_applications')
+                .update({ status: 'Approved' })
+                .eq('id', appId);
+
+            if (error) throw error;
             toast.success("Application approved");
             fetchApplications();
-        } catch (error) {
-            toast.error("Failed to approve");
+        } catch (error: any) {
+            toast.error("Failed to approve: " + error.message);
         }
     };
 
     const handleReject = async (appId: number) => {
         try {
-            await api.post(`/applications/${appId}/reject/`);
+            const { error } = await supabase
+                .from('project_applications')
+                .update({ status: 'Rejected' })
+                .eq('id', appId);
+
+            if (error) throw error;
             toast.success("Application rejected");
             fetchApplications();
-        } catch (error) {
-            toast.error("Failed to reject");
+        } catch (error: any) {
+            toast.error("Failed to reject: " + error.message);
         }
     };
 

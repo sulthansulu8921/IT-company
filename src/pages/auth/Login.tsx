@@ -62,11 +62,11 @@ const Login = () => {
                 <form onSubmit={handleSubmit}>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="username">Username</Label>
+                            <Label htmlFor="username">Email</Label>
                             <Input
                                 id="username"
                                 name="username"
-                                placeholder="Enter your username"
+                                placeholder="Enter your email"
                                 value={formData.username}
                                 onChange={handleChange}
                                 required

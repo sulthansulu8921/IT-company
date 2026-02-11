@@ -6,76 +6,125 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
-import api from '@/lib/axios';
-import { Message } from '@/types';
+import { Message, UserRole } from '@/types';
 import { Send } from 'lucide-react';
 
 interface Conversation {
-    user_id: number;
+    user_id: string; // UUID
     username: string;
     last_message: string;
     timestamp: string;
 }
 
+import { supabase } from "@/lib/supabase";
+
 const GlobalChat = () => {
     const { user } = useAuth();
     const [conversations, setConversations] = useState<Conversation[]>([]);
-    const [activePartnerId, setActivePartnerId] = useState<number | null>(null);
+    const [activePartnerId, setActivePartnerId] = useState<string | null>(null);
     const [activePartnerName, setActivePartnerName] = useState<string>('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    // Fetch Conversations
+    // Fetch Conversations (group messages by partner)
     const fetchConversations = async () => {
         try {
-            const response = await api.get('/messages/conversations/');
-            setConversations(response.data);
+            if (!user) return;
+
+            // Fetch all messages where user is sender OR receiver
+            const { data, error } = await supabase
+                .from('messages')
+                .select(`
+                    *,
+                    sender:profiles!sender_id(id, username, first_name, last_name),
+                    receiver:profiles!receiver_id(id, username, first_name, last_name)
+                `)
+                .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const partnerMap = new Map<string, Conversation>();
+
+            data?.forEach((msg: any) => {
+                const isSender = msg.sender_id === user.id;
+                const partner = isSender ? msg.receiver : msg.sender;
+                const partnerId = partner?.id;
+
+                if (partnerId && !partnerMap.has(partnerId)) {
+                    partnerMap.set(partnerId, {
+                        user_id: partnerId,
+                        username: partner.first_name ? `${partner.first_name} ${partner.last_name}` : partner.username,
+                        last_message: msg.content,
+                        timestamp: msg.created_at
+                    });
+                }
+            });
+
+            setConversations(Array.from(partnerMap.values()));
         } catch (error) {
-            console.error("Failed to fetch conversations");
+            console.error("Failed to fetch conversations", error);
         }
     };
 
     // Fetch Messages for active chat
-    const fetchMessages = async (partnerId: number) => {
+    const fetchMessages = async (partnerId: string) => {
         try {
-            const response = await api.get(`/messages/?user_id=${partnerId}`);
-            setMessages(response.data);
+            if (!user) return;
+
+            const { data, error } = await supabase
+                .from('messages')
+                .select('*')
+                .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
+                .order('created_at', { ascending: true });
+
+            if (error) throw error;
+            setMessages(data || []);
             scrollToBottom();
-        } catch (error) {
-            toast.error("Failed to load chat");
+        } catch (error: any) {
+            toast.error("Failed to load chat: " + error.message);
         }
     };
 
     const scrollToBottom = () => {
         if (scrollRef.current) {
-            scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+            setTimeout(() => {
+                scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
         }
     };
 
     useEffect(() => {
-        fetchConversations();
-        // Auto-refresh conversations periodically
-        const interval = setInterval(fetchConversations, 10000);
-        return () => clearInterval(interval);
-    }, []);
+        if (user) {
+            fetchConversations();
+            const interval = setInterval(fetchConversations, 10000);
+            return () => clearInterval(interval);
+        }
+    }, [user]);
 
-    // Ensure Admin is always available to chat for non-admins
+    // Ensure Admin is always available to chat
     useEffect(() => {
         const ensureAdminContact = async () => {
-            if (user?.role === 'Admin') return; // Admin doesn't need to chat with themselves (or maybe they do to test?)
+            if (!user || user.role === UserRole.ADMIN) return;
 
             try {
                 // Fetch admin details
-                const response = await api.get('/users/admin_contact/');
-                const adminProfile = response.data;
-                const adminId = adminProfile.user.id;
+                const { data: adminProfile, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('role', UserRole.ADMIN)
+                    .limit(1)
+                    .single();
+
+                if (error || !adminProfile) return; // No admin found
+
+                const adminId = adminProfile.id;
 
                 // Check if admin is already in conversations
                 const adminInConvo = conversations.find(c => c.user_id === adminId);
 
                 if (!adminInConvo) {
-                    // Add Admin to the TOP of the list
                     const adminConversation: Conversation = {
                         user_id: adminId,
                         username: "Support (Admin)",
@@ -84,7 +133,6 @@ const GlobalChat = () => {
                     };
                     setConversations(prev => [adminConversation, ...prev]);
 
-                    // If no active chat, select Admin
                     if (!activePartnerId) {
                         setActivePartnerId(adminId);
                         setActivePartnerName("Support (Admin)");
@@ -95,19 +143,17 @@ const GlobalChat = () => {
             }
         };
 
-        if (user && conversations.length === 0) { // Only force adding if list is empty or check logic inside
+        if (user && conversations.length === 0) {
             ensureAdminContact();
         } else if (user && conversations.length > 0) {
-            // We could still add it if missing, but let's prioritize empty state fix first
             ensureAdminContact();
         }
 
-    }, [user, conversations.length]); // Dep on length to retry if list loads and admin is missing
+    }, [user, conversations.length]);
 
     useEffect(() => {
         if (activePartnerId) {
             fetchMessages(activePartnerId);
-            // Set up polling interval for real-time-ish feel
             const interval = setInterval(() => fetchMessages(activePartnerId), 5000);
             return () => clearInterval(interval);
         }
@@ -115,18 +161,24 @@ const GlobalChat = () => {
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMessage.trim() || !activePartnerId) return;
+        if (!newMessage.trim() || !activePartnerId || !user) return;
 
         try {
-            await api.post('/messages/', {
-                receiver: activePartnerId,
-                content: newMessage
-            });
+            const { error } = await supabase
+                .from('messages')
+                .insert({
+                    sender_id: user.id,
+                    receiver_id: activePartnerId,
+                    content: newMessage
+                });
+
+            if (error) throw error;
+
             setNewMessage('');
             fetchMessages(activePartnerId);
-            fetchConversations(); // Update last message preview
-        } catch (error) {
-            toast.error("Failed to send message");
+            fetchConversations();
+        } catch (error: any) {
+            toast.error("Failed to send message: " + error.message);
         }
     };
 
@@ -134,11 +186,6 @@ const GlobalChat = () => {
         setActivePartnerId(conv.user_id);
         setActivePartnerName(conv.username);
     };
-
-    // If Client/Dev, maybe we want to allow starting a chat with Admin even if no conversation exists?
-    // For simplicity, let's assume they initiate via a "Contact Admin" button elsewhere or we pre-seed conversations.
-    // OR add a "New Chat" button searching for users.
-    // For now, let's allow finding Admin easily.
 
     return (
         <div className="flex h-[calc(100vh-100px)] p-6 gap-6 max-w-7xl mx-auto">
@@ -190,12 +237,7 @@ const GlobalChat = () => {
                             <ScrollArea className="h-full pr-4">
                                 <div className="space-y-4">
                                     {messages.map(msg => {
-                                        const isMe = msg.sender === user?.user?.id || (user?.id && msg.sender === user.id) || false; // Check user ID structure
-                                        // Wait, user object structure in AuthContext is { user: {id, username..}, .. } or just {id, username}?
-                                        // Let's check AuthContext. It seems user is Profile which has nested user? No, AuthContext usually stores User/Profile combination.
-                                        // Checking types/index.ts: Profile has `user: User`. AuthContext usually returns Profile.
-                                        // So `user?.user.id` is correct.
-                                        const isMyMessage = msg.sender === user?.user.id;
+                                        const isMyMessage = msg.sender === user?.id; // Flattened check
 
                                         return (
                                             <div key={msg.id} className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}>

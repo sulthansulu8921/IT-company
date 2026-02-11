@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import api from '@/lib/axios';
 import { Project, ProjectStatus } from '@/types';
 import { Link } from 'react-router-dom';
+import { supabase } from "@/lib/supabase";
 
 const AdminProjectList = () => {
     const [projects, setProjects] = useState<Project[]>([]);
@@ -13,10 +13,21 @@ const AdminProjectList = () => {
 
     const fetchProjects = async () => {
         try {
-            const response = await api.get('/projects/');
-            setProjects(response.data);
-        } catch (error) {
-            toast.error("Failed to fetch projects");
+            const { data, error } = await supabase
+                .from('projects')
+                .select('*, client:profiles(username, first_name, last_name)')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const formattedProjects = data?.map((p: any) => ({
+                ...p,
+                client_name: p.client ? (p.client.first_name ? `${p.client.first_name} ${p.client.last_name}` : p.client.username) : 'Unknown'
+            })) || [];
+
+            setProjects(formattedProjects);
+        } catch (error: any) {
+            toast.error("Failed to fetch projects: " + error.message);
         } finally {
             setIsLoading(false);
         }

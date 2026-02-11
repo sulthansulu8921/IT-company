@@ -7,13 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import api from '@/lib/axios';
 import { Payment, Profile, UserRole } from '@/types';
 import { DollarSign, TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownLeft, Lock } from 'lucide-react';
 
+import { supabase } from "@/lib/supabase";
+
 const Treasury = () => {
     const [payments, setPayments] = useState<Payment[]>([]);
-    const [users, setUsers] = useState<Profile[]>([]);
+    const [users, setUsers] = useState<Profile[]>([]); // Developers list
     const [isLoading, setIsLoading] = useState(true);
     const [isPayoutOpen, setIsPayoutOpen] = useState(false);
     const [newPayout, setNewPayout] = useState({
@@ -23,13 +24,28 @@ const Treasury = () => {
     const fetchData = async () => {
         try {
             const [payRes, userRes] = await Promise.all([
-                api.get('/payments/'),
-                api.get('/users/')
+                supabase.from('payments')
+                    .select('*, payer:profiles!payer_id(username, first_name, last_name), payee:profiles!payee_id(username, first_name, last_name)')
+                    .order('created_at', { ascending: false }),
+                supabase.from('profiles')
+                    .select('*')
+                    .eq('role', UserRole.DEVELOPER)
+                    .eq('is_approved', true)
             ]);
-            setPayments(payRes.data);
+
+            if (payRes.error) throw payRes.error;
+            if (userRes.error) throw userRes.error;
+
+            const formattedPayments = payRes.data.map((p: any) => ({
+                ...p,
+                payer_name: p.payer ? (p.payer.first_name ? `${p.payer.first_name} ${p.payer.last_name}` : p.payer.username) : 'System',
+                payee_name: p.payee ? (p.payee.first_name ? `${p.payee.first_name} ${p.payee.last_name}` : p.payee.username) : 'System'
+            }));
+            setPayments(formattedPayments);
             setUsers(userRes.data);
-        } catch (error) {
-            toast.error("Failed to load treasury data");
+        } catch (error: any) {
+            console.error(error);
+            toast.error("Failed to load treasury data: " + error.message);
         } finally {
             setIsLoading(false);
         }
@@ -42,19 +58,23 @@ const Treasury = () => {
     const handleCreatePayout = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await api.post('/payments/', {
-                payee: newPayout.payee,
-                amount: newPayout.amount,
-                payment_type: 'Payout',
-                status: 'Paid', // Admin payouts are immediate for now
-                payer: undefined
-            });
+            const { error } = await supabase
+                .from('payments')
+                .insert({
+                    payee_id: newPayout.payee, // Assuming schema uses payee_id
+                    amount: newPayout.amount,
+                    payment_type: 'Payout',
+                    status: 'Paid',
+                    payer_id: null // System payout
+                });
+
+            if (error) throw error;
             toast.success("Payout recorded successfully");
             setIsPayoutOpen(false);
             setNewPayout({ payee: '', amount: '' });
             fetchData();
-        } catch (error) {
-            toast.error("Failed to record payout");
+        } catch (error: any) {
+            toast.error("Failed to record payout: " + error.message);
         }
     };
 
@@ -102,9 +122,9 @@ const Treasury = () => {
                                                 <SelectValue placeholder="Select Developer" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {developers.map(dev => (
-                                                    <SelectItem key={dev.user.id} value={String(dev.user.id)}>
-                                                        {dev.user.username}
+                                                {users.map(dev => (
+                                                    <SelectItem key={dev.id} value={dev.id}>
+                                                        {dev.username}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -196,8 +216,8 @@ const Treasury = () => {
                                                 <TableCell className="font-medium text-slate-900">{new Date(p.created_at).toLocaleDateString()}</TableCell>
                                                 <TableCell>
                                                     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${p.payment_type === 'Incoming'
-                                                            ? 'bg-green-100 text-green-700'
-                                                            : 'bg-red-100 text-red-700'
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : 'bg-red-100 text-red-700'
                                                         }`}>
                                                         {p.payment_type === 'Incoming' ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
                                                         {p.payment_type}

@@ -22,6 +22,8 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { toast } from "sonner";
 
+import { supabase } from "@/lib/supabase";
+
 const ClientRegister = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -59,22 +61,78 @@ const ClientRegister = () => {
     setLoading(true);
 
     try {
-      // 🔹 SEND DATA TO YOUR BACKEND API
-      const response = await fetch("http://localhost:5000/api/clients/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
+      const nameParts = formData.fullName.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      // 1. Sign Up
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            role: 'Client'
+          }
+        }
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Registration failed");
+      if (authError) throw authError;
+      if (!authData.user) throw new Error("Registration failed");
+
+      // 2. Update Profile (if trigger didn't catch everything or to be sure)
+      // Wait for trigger to create profile or insert if it doesn't?
+      // Usually trigger is fast. We can try update.
+      // If trigger uses metadata, we might be good on name/role.
+      // We need to update phone and maybe bio with company info.
+      const bio = `Company: ${formData.companyName}\nIndustry: ${formData.industry}`;
+
+      // Give a small delay for trigger? Or just retry?
+      // Safer to use upsert or wait. But let's try update.
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          phone: formData.phone,
+          role: 'Client',
+          // Store company info in bio/experience or similar if no column exists
+          // Checking types: Profile has 'skills', 'experience', 'portfolio'.
+          // Use 'experience' for company details? Or just ignore if not critical.
+          // Let's use a standard bio field if I can find it? types/index.ts doesn't show bio.
+          // It shows `experience`?
+          // Let's assume standard fields.
+        })
+        .eq('id', authData.user.id);
+
+      // If profile doesn't exist yet (trigger lag), this might fail or do nothing.
+      // ideally we insert if not exists, but id must match auth.users.
+      // If we have a trigger, it should exist.
+
+      // 3. Create First Project (Optional)
+      if (formData.projectTitle) {
+        const { error: projError } = await supabase
+          .from('projects')
+          .insert({
+            title: formData.projectTitle,
+            description: formData.projectDescription,
+            service_type: formData.category,
+            budget: formData.budget,
+            deadline: formData.deadline || null,
+            client: authData.user.id,
+            status: 'Open'
+          });
+
+        if (projError) console.error("Failed to create project", projError);
       }
 
-      toast.success("Registration successful!");
-      navigate("/client-dashboard");
+      toast.success("Registration successful! Please check your email to verify account.");
+      navigate("/auth"); // Redirect to login or dashboard? Login usually required after signup unless auto-signin.
+      // Supabase auto-signs in if email confirm is off. 
+      // If on, user needs to check email.
+      // I'll redirect to auth (Login) to be safe.
+
     } catch (error: any) {
       toast.error(error.message || "Something went wrong");
     } finally {

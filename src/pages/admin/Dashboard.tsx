@@ -56,7 +56,7 @@ const AdminDashboard = () => {
                             <ShieldCheck className="w-8 h-8 text-indigo-600" />
                             Admin Command Center
                         </h1>
-                        <p className="text-slate-500 mt-1">Welcome back, {user?.user.username}</p>
+                        <p className="text-slate-500 mt-1">Welcome back, {user?.username}</p>
                     </div>
                     <Button variant="outline" onClick={logout} className="text-red-500 hover:text-red-600 hover:bg-red-50">Logout</Button>
                 </div>

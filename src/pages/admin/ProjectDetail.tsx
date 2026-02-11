@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import api from '@/lib/axios';
 import { Project, Task, Profile, UserRole, ProjectStatus, ProjectApplication } from '@/types';
+
+import { supabase } from "@/lib/supabase";
 
 const AdminProjectDetail = () => {
     const { id } = useParams();
@@ -26,28 +27,61 @@ const AdminProjectDetail = () => {
 
     const fetchData = async () => {
         try {
+            if (!id) return;
+
             const [projRes, tasksRes, devsRes, appsRes] = await Promise.all([
-                api.get(`/projects/${id}/`),
-                api.get(`/tasks/?project=${id}`),
-                api.get('/users/'),
-                api.get(`/applications/?project_id=${id}`)
+                supabase.from('projects').select('*, client:profiles(*)').eq('id', id).single(),
+                supabase.from('tasks').select('*, assigned_to:profiles(*)').eq('project_id', id),
+                supabase.from('profiles').select('*').eq('role', UserRole.DEVELOPER).eq('is_approved', true),
+                supabase.from('project_applications').select('*, developer:profiles(*)').eq('project_id', id)
             ]);
-            setProject(projRes.data);
-            setTasks(tasksRes.data.filter((t: Task) => t.project === Number(id)));
-            setDevelopers(devsRes.data.filter((u: Profile) => u.role === UserRole.DEVELOPER && u.is_approved));
-            setApplications(appsRes.data);
-        } catch (error) {
-            toast.error("Failed to load project details");
+
+            if (projRes.error) throw projRes.error;
+            if (tasksRes.error) throw tasksRes.error;
+            if (devsRes.error) throw devsRes.error;
+            if (appsRes.error) throw appsRes.error;
+
+            const projData = projRes.data;
+            const clientName = projData.client ? (projData.client.first_name ? `${projData.client.first_name} ${projData.client.last_name}` : projData.client.username) : 'Unknown';
+            setProject({ ...projData, client_name: clientName });
+
+            const formattedTasks = tasksRes.data.map((t: any) => ({
+                ...t,
+                assigned_to_name: t.assigned_to ? (t.assigned_to.first_name ? `${t.assigned_to.first_name} ${t.assigned_to.last_name}` : t.assigned_to.username) : 'Unassigned'
+            }));
+            setTasks(formattedTasks);
+
+            setDevelopers(devsRes.data);
+
+            const formattedApps = appsRes.data.map((a: any) => ({
+                ...a,
+                developer_name: a.developer ? (a.developer.first_name ? `${a.developer.first_name} ${a.developer.last_name}` : a.developer.username) : 'Unknown'
+            }));
+            setApplications(formattedApps);
+
+        } catch (error: any) {
+            console.error(error);
+            toast.error("Failed to load project details: " + error.message);
         }
     };
 
-    const handleApproveApplication = async (appId: number) => {
+    const handleApproveApplication = async (appId: number, developerId: string) => {
         try {
-            await api.post(`/applications/${appId}/approve/`);
-            toast.success("Application approved and Developer assigned");
+            // 1. Update application status
+            const { error: appError } = await supabase
+                .from('project_applications')
+                .update({ status: 'Approved' })
+                .eq('id', appId);
+            if (appError) throw appError;
+
+            // 2. Reject other applications for this project? (Optional, maybe not now)
+
+            // 3. Update project status to In Progress? (Maybe let admin do it manually)
+
+            toast.success("Application approved");
             fetchData();
-        } catch (error) {
-            toast.error("Failed to approve application");
+        } catch (error: any) {
+            toast.error("Failed to approve application: " + error.message);
         }
     };
 
@@ -57,38 +91,56 @@ const AdminProjectDetail = () => {
 
     const handleUpdateStatus = async (status: ProjectStatus) => {
         try {
-            await api.patch(`/projects/${id}/`, { status });
+            const { error } = await supabase
+                .from('projects')
+                .update({ status })
+                .eq('id', id);
+
+            if (error) throw error;
             toast.success("Project status updated");
             fetchData();
-        } catch (error) {
-            toast.error("Failed to update status");
+        } catch (error: any) {
+            toast.error("Failed to update status: " + error.message);
         }
     };
 
     const handleCreateTask = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await api.post('/tasks/', {
-                ...newTask,
-                project: id,
-                assigned_to: newTask.assigned_to
-            });
+            const { error } = await supabase
+                .from('tasks')
+                .insert({
+                    ...newTask,
+                    project_id: id,
+                    assigned_to: newTask.assigned_to,
+                    status: 'Assigned'
+                });
+
+            if (error) throw error;
+
             toast.success("Task assigned successfully");
             setIsTaskModalOpen(false);
+            setNewTask({ title: '', description: '', budget: '', deadline: '', assigned_to: '' });
             fetchData();
-        } catch (error) {
-            toast.error("Failed to create task");
+        } catch (error: any) {
+            console.error(error);
+            toast.error("Failed to create task: " + error.message);
         }
     };
 
     const handleDeleteTask = async (taskId: number) => {
         if (!confirm("Are you sure you want to delete this task?")) return;
         try {
-            await api.delete(`/tasks/${taskId}/`);
+            const { error } = await supabase
+                .from('tasks')
+                .delete()
+                .eq('id', taskId);
+
+            if (error) throw error;
             toast.success("Task deleted successfully");
             fetchData();
-        } catch (error) {
-            toast.error("Failed to delete task");
+        } catch (error: any) {
+            toast.error("Failed to delete task: " + error.message);
         }
     };
 
@@ -166,7 +218,7 @@ const AdminProjectDetail = () => {
                                     </div>
                                     <div className="flex gap-2">
                                         {app.status === 'Pending' && (
-                                            <Button size="sm" onClick={() => handleApproveApplication(app.id)}>Approve & Assign</Button>
+                                            <Button size="sm" onClick={() => handleApproveApplication(app.id, app.developer.toString())}>Approve & Assign</Button>
                                         )}
                                     </div>
                                 </div>
@@ -215,10 +267,10 @@ const AdminProjectDetail = () => {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {developers
-                                                    .filter(dev => applications.some(app => app.developer === dev.user.id))
+                                                    .filter(dev => applications.some(app => app.developer.toString() === dev.id))
                                                     .map(dev => (
-                                                        <SelectItem key={dev.user.id} value={String(dev.user.id)}>
-                                                            {dev.user.username} ({dev.skills || 'No skills listed'})
+                                                        <SelectItem key={dev.id} value={dev.id}>
+                                                            {dev.username} ({dev.skills || 'No skills listed'})
                                                         </SelectItem>
                                                     ))}
                                             </SelectContent>

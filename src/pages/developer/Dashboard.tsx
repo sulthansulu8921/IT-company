@@ -29,9 +29,11 @@ import {
     Terminal,
     CheckCircle2,
 } from "lucide-react";
-import api from "@/lib/axios";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
 
 const DeveloperDashboard = () => {
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState<any>(null);
@@ -41,26 +43,36 @@ const DeveloperDashboard = () => {
     const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
-        loadDashboard();
-    }, []);
+        if (user) {
+            loadDashboard();
+        }
+    }, [user]);
 
     const loadDashboard = async () => {
         try {
-            const res = await api.get('/developers/dashboard');
+            // Fetch available projects (Marketplace)
+            const { data: projects, error: projError } = await supabase
+                .from('projects')
+                .select('*')
+                .eq('status', 'Open') // Assuming 'Open' is the status for projects needing devs
+                .order('created_at', { ascending: false });
 
-            const data = res.data;
+            if (projError) throw projError;
 
-            setProfile(data.profile || null);
-            setDeveloper(data.developer || null);
-            setAvailableProjects(data.availableProjects || []);
-            // Determine if applications are approved or pending to simulate "Service Status"
-            setMyApplications(data.myApplications || []);
-        } catch (err) {
+            // Fetch my applications
+            const { data: applications, error: appError } = await supabase
+                .from('project_applications')
+                .select('*, project:projects(*)')
+                .eq('developer_id', user?.id);
+
+            if (appError) throw appError;
+
+            setProfile(user); // Profile is already in context
+            setAvailableProjects(projects || []);
+            setMyApplications(applications || []);
+        } catch (err: any) {
             console.error(err);
-            toast.error("Failed to load dashboard. Ensure backend is running.");
-            // Don't redirect on error instantly, allows user to see the dashboard shell at least? 
-            // Actually previous behavior was redirect to auth. let's keep it safe.
-            // navigate("/auth");
+            toast.error("Failed to load dashboard: " + err.message);
         } finally {
             setLoading(false);
         }
@@ -68,12 +80,20 @@ const DeveloperDashboard = () => {
 
     const handleApply = async (projectId: string) => {
         try {
-            await api.post('/applications/', { project: projectId });
+            const { error } = await supabase
+                .from('project_applications')
+                .insert({
+                    project_id: projectId,
+                    developer_id: user?.id,
+                    status: 'Pending'
+                });
+
+            if (error) throw error;
 
             toast.success("Application submitted!");
             loadDashboard();
         } catch (err: any) {
-            toast.error(err.response?.data?.message || "Failed to apply");
+            toast.error(err.message || "Failed to apply");
         }
     };
 

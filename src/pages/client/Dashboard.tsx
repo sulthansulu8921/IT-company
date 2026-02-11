@@ -7,11 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import api from '@/lib/axios';
 import { Project, ProjectStatus } from '@/types';
 import { Palette, Globe, Smartphone, Megaphone, Search, Settings, Server, Layout, Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
 import ProjectStatusTracker from '@/components/ProjectStatusTracker';
 
 const SERVICES = [
@@ -29,7 +29,6 @@ const SERVICES = [
 import bg1 from "@/assets/bg1.jpeg";
 
 const ClientDashboard = () => {
-    // ... hooks
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [projects, setProjects] = useState<Project[]>([]);
@@ -47,22 +46,49 @@ const ClientDashboard = () => {
 
     const fetchProjects = async () => {
         try {
-            const [projRes, taskRes] = await Promise.all([
-                api.get('/projects/'),
-                api.get('/tasks/')
-            ]);
-            setProjects(projRes.data || []);
-            setTasks(taskRes.data || []);
-        } catch (error) {
+            if (!user) return;
+
+            // Fetch Projects
+            const { data: projData, error: projError } = await supabase
+                .from('projects')
+                .select('*')
+                .eq('client_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (projError) throw projError;
+
+            // Fetch Tasks for these projects
+            // We need tasks where project.client_id = user.id
+            // Supabase inner join filtering:
+            const { data: taskData, error: taskError } = await supabase
+                .from('tasks')
+                .select('*, project:projects!inner(title, client_id, id)')
+                .eq('project.client_id', user.id);
+
+            // Reshape task data to include project_title flattened if needed by UI
+            const formattedTasks = taskData?.map((t: any) => ({
+                ...t,
+                project_title: t.project?.title,
+                // assigned_to_name: ... fetch profile name if needed, or join profile.
+                // For now, let's just keep basic task info
+            })) || [];
+
+
+            setProjects(projData || []);
+            setTasks(formattedTasks);
+        } catch (error: any) {
             console.error("Failed to fetch data", error);
+            toast.error("Error loading dashboard: " + error.message);
         } finally {
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchProjects();
-    }, []);
+        if (user) {
+            fetchProjects();
+        }
+    }, [user]);
 
     const handleCreateSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -72,24 +98,40 @@ const ClientDashboard = () => {
         }
 
         try {
-            await api.post('/projects/', newProject);
+            const { error } = await supabase
+                .from('projects')
+                .insert({
+                    ...newProject,
+                    client_id: user?.id,
+                    status: 'Pending'
+                });
+
+            if (error) throw error;
+
             toast.success('Project request submitted successfully');
             setIsCreateOpen(false);
             setStep(1);
             setNewProject({ title: '', description: '', service_type: '', budget: '' });
             fetchProjects();
-        } catch (error) {
-            toast.error('Failed to create project');
+        } catch (error: any) {
+            console.error(error);
+            toast.error('Failed to create project: ' + error.message);
         }
     };
 
     const handleUpdateTaskStatus = async (taskId: number, status: string) => {
         try {
-            await api.patch(`/tasks/${taskId}/`, { status });
+            const { error } = await supabase
+                .from('tasks')
+                .update({ status })
+                .eq('id', taskId);
+
+            if (error) throw error;
+
             toast.success(`Task marked as ${status}`);
             fetchProjects();
-        } catch (error) {
-            toast.error("Failed to update task status");
+        } catch (error: any) {
+            toast.error("Failed to update task status: " + error.message);
         }
     };
 
@@ -135,7 +177,7 @@ const ClientDashboard = () => {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/60 backdrop-blur-md p-6 rounded-2xl border border-slate-700 shadow-sm">
                     <div>
                         <h1 className="text-3xl font-bold text-white tracking-tight">Client Dashboard</h1>
-                        <p className="text-slate-400 mt-1">Welcome back, <span className="font-semibold text-indigo-400">{user?.user.first_name || user?.user.username}</span></p>
+                        <p className="text-slate-400 mt-1">Welcome back, <span className="font-semibold text-indigo-400">{user?.first_name || user?.username}</span></p>
                     </div>
                     <div className="flex gap-4">
                         <Dialog open={isCreateOpen} onOpenChange={(open) => {

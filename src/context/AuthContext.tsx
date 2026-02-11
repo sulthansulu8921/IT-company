@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import api from '@/lib/axios';
+import { supabase } from '@/lib/supabase';
 import { Profile, UserRole } from '@/types';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,54 +19,97 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isLoading, setIsLoading] = useState(true);
     const navigate = useNavigate();
 
-    const fetchUser = async () => {
+    const fetchProfile = async (userId: string) => {
         try {
-            const response = await api.get('/user/me/');
-            // Checking api/urls.py... wait, the UserDetailView wasn't explicitly shown in urls.py snippet earlier but checking UserDetailView generics.RetrieveAPIView...
-            // Actually, let's verify the endpoint for user details.
-            // Assuming it is /auth/user/ or similar. The user snippet showed `router.register("users", ...)` but that's for admin list.
-            // There was `UserDetailView`. Let's assume it's mapped. If not I need to fix backend too. 
-            // BUT, for now let's fix the frontend redirect.
-            setUser(response.data);
-            return response.data;
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+
+            if (error) {
+                console.error('Error fetching profile:', error);
+                return null;
+            }
+            return data as Profile;
         } catch (error) {
-            console.error("Failed to fetch user", error);
-            logout();
+            console.error('Unexpected error fetching profile:', error);
             return null;
-        } finally {
-            setIsLoading(false);
         }
     };
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            fetchUser();
-        } else {
+        // Check active session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user) {
+                fetchProfile(session.user.id).then((profile) => {
+                    setUser(profile);
+                    setIsLoading(false);
+                });
+            } else {
+                setIsLoading(false);
+            }
+        });
+
+        // Listen for changes
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            if (session?.user) {
+                const profile = await fetchProfile(session.user.id);
+                setUser(profile);
+            } else {
+                setUser(null);
+            }
             setIsLoading(false);
-        }
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     const login = async (credentials: any) => {
-        const response = await api.post('/auth/login/', credentials);
-        localStorage.setItem('token', response.data.access);
-        const profile = await fetchUser();
-        if (profile) {
-            if (profile.role === UserRole.ADMIN) navigate('/admin');
-            else if (profile.role === UserRole.CLIENT) navigate('/client');
-            else if (profile.role === UserRole.DEVELOPER) navigate('/developer');
-            else navigate('/');
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: credentials.username, // Assuming username field in login form actually contains email, or we need to change login form to use email.
+            // Wait, looking at RegisterDeveloper, we use 'username' and 'email'. Django used username. Supabase uses email.
+            // I will need to update Login page to send 'email' or handle username->email lookup (complex).
+            // For now, let's assume the user enters EMAIL in the "username" field or we update the UI label.
+            password: credentials.password,
+        });
+
+        if (error) throw error;
+
+        if (data.user) {
+            const profile = await fetchProfile(data.user.id);
+            if (profile) {
+                if (profile.role === UserRole.ADMIN) navigate('/admin');
+                else if (profile.role === UserRole.CLIENT) navigate('/client');
+                else if (profile.role === UserRole.DEVELOPER) navigate('/developer');
+                else navigate('/');
+            }
         }
     };
 
     const register = async (data: any) => {
-        const response = await api.post('/auth/register/', data);
-        return response;
+        // Supabase requires email.
+        const { data: authData, error } = await supabase.auth.signUp({
+            email: data.email,
+            password: data.password,
+            options: {
+                data: {
+                    username: data.username,
+                    first_name: data.first_name,
+                    last_name: data.last_name,
+                    role: data.role,
+                },
+            },
+        });
+
+        if (error) throw error;
+        return authData;
     };
 
-    const logout = () => {
-        localStorage.removeItem('token');
-        setUser(null);
+    const logout = async () => {
+        await supabase.auth.signOut();
         navigate('/auth/login');
     };
 

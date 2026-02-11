@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,7 @@ import { UserRole } from '@/types';
 import bg1 from "@/assets/bg1.jpeg";
 
 const RegisterClient = () => {
-    const { register, login } = useAuth();
+    const { } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         username: '', password: '', email: '', first_name: '', last_name: ''
@@ -25,11 +26,48 @@ const RegisterClient = () => {
         e.preventDefault();
         setIsLoading(true);
         try {
-            await register({ ...formData, role: UserRole.CLIENT });
-            toast.success('Registration successful. Logging you in...');
+            // 1. Sign Up
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: formData.email,
+                password: formData.password,
+                options: {
+                    data: {
+                        first_name: formData.first_name,
+                        last_name: formData.last_name,
+                        username: formData.username,
+                        role: UserRole.CLIENT
+                    }
+                }
+            });
 
-            // Auto login
-            await login({ username: formData.email, password: formData.password });
+            if (authError) throw authError;
+            if (!authData.user) throw new Error("Registration failed");
+
+            // 2. Create Profile (if trigger doesn't exist/work)
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .upsert({
+                    id: authData.user.id,
+                    first_name: formData.first_name,
+                    last_name: formData.last_name,
+                    username: formData.username,
+                    email: formData.email,
+                    role: UserRole.CLIENT,
+                    is_approved: true // Clients auto-approved? Usually yes.
+                });
+
+            if (profileError) {
+                console.error("Profile creation failed", profileError);
+            }
+
+            // 3. Handle Email Confirmation vs Auto-Login
+            if (!authData.session) {
+                toast.success('Registration successful! Please check your email to verify your account.');
+                navigate("/auth/login");
+            } else {
+                toast.success('Registration successful!');
+                navigate("/client-dashboard");
+            }
         } catch (error: any) {
             console.error("Registration error:", error);
             const errorMsg = error.message || 'Registration failed.';

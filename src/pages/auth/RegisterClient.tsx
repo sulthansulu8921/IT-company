@@ -60,14 +60,9 @@ const RegisterClient = () => {
                 console.error("Profile creation failed", profileError);
             }
 
-            // 3. Handle Email Confirmation vs Auto-Login
-            if (!authData.session) {
-                toast.success('Registration successful! Please check your email to verify your account.');
-                navigate("/auth/login");
-            } else {
-                toast.success('Registration successful!');
-                navigate("/client-dashboard");
-            }
+            // 3. Auto-Login / Navigation
+            toast.success('Registration successful!');
+            navigate("/client-dashboard");
         } catch (error: any) {
             console.error("Registration error:", error);
             const errorMsg = error.message || 'Registration failed.';

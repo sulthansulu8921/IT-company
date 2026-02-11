@@ -1,5 +1,6 @@
 -- Enable RLS
-alter table auth.users enable row level security;
+-- Enable RLS (managed by Supabase dashboard usually, skipping explicit command to avoid permission error)
+-- alter table auth.users enable row level security;
 
 -- Create profiles table (extends auth.users)
 -- Create profiles table (extends auth.users)
@@ -39,8 +40,15 @@ create policy "Users can insert their own profile"
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, email, username, role)
-  values (new.id, new.email, new.raw_user_meta_data->>'username', coalesce(new.raw_user_meta_data->>'role', 'Client'));
+  insert into public.profiles (id, email, username, first_name, last_name, role)
+  values (
+    new.id, 
+    new.email, 
+    new.raw_user_meta_data->>'username', 
+    new.raw_user_meta_data->>'first_name', 
+    new.raw_user_meta_data->>'last_name', 
+    coalesce(new.raw_user_meta_data->>'role', 'Client')
+  );
   return new;
 end;
 $$ language plpgsql security definer;

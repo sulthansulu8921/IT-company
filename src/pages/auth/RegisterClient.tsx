@@ -62,7 +62,7 @@ const RegisterClient = () => {
 
             // 3. Auto-Login / Navigation
             toast.success('Registration successful!');
-            navigate("/client-dashboard");
+            navigate("/client");
         } catch (error: any) {
             console.error("Registration error:", error);
             const errorMsg = error.message || 'Registration failed.';
